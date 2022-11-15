@@ -1,10 +1,17 @@
 name: Deploy
 
-on: workflow_dispatch
+on: 
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        type: environment
+        required: true
 
 jobs:
   deploy-backend:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     defaults:
       run:
         working-directory: ./backend
@@ -33,4 +40,34 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: 910995218760.dkr.ecr.us-west-2.amazonaws.com/backend:${{ github.sha }}
+          tags: 910995218760.dkr.ecr.us-west-2.amazonaws.com/backend:${{ inputs.environment }}-${{ github.sha }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Download task definition
+        run: |
+          aws ecs describe-task-definition --task-definition backend-${{ inputs.environment }} --query taskDefinition > taskDefinition.json
+
+      - name: ls
+        run: ls
+
+      - name: Fill in the new image ID in the Amazon ECS task definition
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: ./backend/taskDefinition.json
+          container-name: backend
+          image: 910995218760.dkr.ecr.us-west-2.amazonaws.com/backend:${{ inputs.environment }}-${{ github.sha }}
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: backend-${{ inputs.environment }}
+          cluster: ${{ inputs.environment }}
+          wait-for-service-stability: true
