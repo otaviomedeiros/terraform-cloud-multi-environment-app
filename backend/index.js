@@ -5,7 +5,7 @@ dotenv.config()
 var app = express()
 
 app.get('/', (req, res) => {
-  res.send(`Backend: ${process.env.ENV}`)
+  res.send(`Backend => ${process.env.ENV}.`)
 })
 
 app.listen(process.env.PORT, () => {
